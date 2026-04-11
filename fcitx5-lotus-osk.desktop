@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Lotus OSK
+Comment=On-Screen Keyboard for Lotus Input Method
+Exec=fcitx5-lotus-osk
+Icon=input-keyboard
+Terminal=false
+Type=Application
+Categories=Settings;Utility;
+Keywords=keyboard;osk;lotus;

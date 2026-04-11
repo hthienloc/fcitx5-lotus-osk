@@ -4,13 +4,20 @@
 #include <QtDBus/QDBusConnection>
 #include <QtDBus/QDBusError>
 #include <QtDBus/QDBusMessage>
+#include <QApplication>
+#include <QAction>
+#include <QActionGroup>
 #include <QDateTime>
+#include <QSettings>
+#include <QDir>
+#include <QPalette>
+#include <QStandardPaths>
 #include <sys/socket.h>
 #include <poll.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <cstddef>
-
+#include <fcntl.h>
+#include <glob.h>
 #include <pwd.h>
 #include "lotus-key-command.h"
 
@@ -21,10 +28,121 @@ OSKController::OSKController(QObject* parent) : QObject(parent), m_visible(false
     m_hideTimer.setInterval(250);
     connect(&m_hideTimer, &QTimer::timeout, this, &OSKController::hideWindow);
 
+    m_configPath = QDir::homePath() + "/.config/fcitx5/lotus-osk.conf";
+
     QDBusConnection::sessionBus().registerService("app.lotus.Osk");
     QDBusConnection::sessionBus().registerObject("/app/lotus/Osk/Controller", this, QDBusConnection::ExportAllSlots);
 
-    // Socket to lotus-server is only needed for CapsLock queries; connect lazily on first use.
+    // Initialize System Tray Icon
+    m_trayIcon = new QSystemTrayIcon(QIcon::fromTheme("input-keyboard"), this);
+    m_trayMenu = new QMenu();
+
+    auto* toggleAction = m_trayMenu->addAction("Toggle Keyboard");
+    connect(toggleAction, &QAction::triggered, this, &OSKController::Toggle);
+
+    auto* autoShowAction = m_trayMenu->addAction("Enable Auto-Show");
+    autoShowAction->setCheckable(true);
+    connect(autoShowAction, &QAction::triggered, this, [this, autoShowAction](bool checked) {
+        m_autoShow = checked;
+        saveConfig();
+    });
+
+    m_trayMenu->addSeparator();
+
+    // Theme Menu
+    QMenu* themeMenu = m_trayMenu->addMenu("Theme");
+    QActionGroup* themeGroup = new QActionGroup(this);
+    QStringList themes = {"Auto", "Light", "Dark"};
+    for (const QString& t : themes) {
+        QAction* act = themeMenu->addAction(t);
+        act->setCheckable(true);
+        themeGroup->addAction(act);
+        if (t == m_themeMode) act->setChecked(true);
+        connect(act, &QAction::triggered, this, [this, t]() {
+            m_themeMode = t;
+            saveConfig();
+            loadConfig(); // Apply changes
+        });
+    }
+
+    // Size Menu
+    QMenu* sizeMenu = m_trayMenu->addMenu("Size");
+    QActionGroup* sizeGroup = new QActionGroup(this);
+    QStringList sizes = {"Small", "Standard", "Large"};
+    for (const QString& s : sizes) {
+        QAction* act = sizeMenu->addAction(s);
+        act->setCheckable(true);
+        sizeGroup->addAction(act);
+        if (s == m_oskSize) act->setChecked(true);
+        connect(act, &QAction::triggered, this, [this, s]() {
+            m_oskSize = s;
+            if (m_window) m_window->setOSKSize(s);
+            saveConfig();
+        });
+    }
+
+    m_trayMenu->addSeparator();
+
+    auto* quitAction = m_trayMenu->addAction("Quit");
+    connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
+
+    m_trayIcon->setContextMenu(m_trayMenu);
+    m_trayIcon->setToolTip("Lotus OSK");
+    m_trayIcon->show();
+
+    connect(m_trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::Trigger) {
+            Toggle();
+        }
+    });
+
+    QApplication::setQuitOnLastWindowClosed(false);
+
+    loadConfig();
+    
+    // Sync Auto-Show checkbox
+    autoShowAction->setChecked(m_autoShow);
+    // Sync Theme checkboxes
+    for (QAction* act : themeGroup->actions()) {
+        if (act->text() == m_themeMode) act->setChecked(true);
+    }
+    // Sync Size checkboxes
+    for (QAction* act : sizeGroup->actions()) {
+        if (act->text() == m_oskSize) act->setChecked(true);
+    }
+}
+
+void OSKController::loadConfig() {
+    QSettings settings(m_configPath, QSettings::IniFormat);
+    m_autoShow = settings.value("AutoShow", true).toBool();
+    m_themeMode = settings.value("Theme", "Auto").toString();
+    m_oskSize = settings.value("Size", "Standard").toString();
+
+    if (m_themeMode == "Light") {
+        m_whiteTheme = true;
+    } else if (m_themeMode == "Dark") {
+        m_whiteTheme = false;
+    } else {
+        m_whiteTheme = !isSystemDarkMode();
+    }
+
+    if (m_window) {
+        m_window->setWhiteTheme(m_whiteTheme);
+        m_window->setOSKSize(m_oskSize);
+    }
+}
+
+void OSKController::saveConfig() {
+    QSettings settings(m_configPath, QSettings::IniFormat);
+    settings.setValue("AutoShow", m_autoShow);
+    settings.setValue("Theme", m_themeMode);
+    settings.setValue("Size", m_oskSize);
+    settings.sync();
+}
+
+bool OSKController::isSystemDarkMode() const {
+    QPalette pal = qApp->palette();
+    return pal.color(QPalette::WindowText).lightness() > pal.color(QPalette::Window).lightness();
 }
 
 void OSKController::connectToServer() {
@@ -57,10 +175,6 @@ void OSKController::connectToServer() {
         m_socketFd = -1;
     } else {
         qDebug() << "Connected to lotus-server socket";
-        if (m_notifier) {
-            m_notifier->setEnabled(false);
-            delete m_notifier;
-        }
         m_notifier = new QSocketNotifier(m_socketFd, QSocketNotifier::Read, this);
         connect(m_notifier, &QSocketNotifier::activated, this, &OSKController::handleSocketActivated);
     }
@@ -125,8 +239,6 @@ void OSKController::notifyServerVisibility() {
 }
 
 void OSKController::sendKey(bool isRelease, uint keycode) {
-    // Key events are sent via the uinput socket to lotus-server, which injects
-    // them as real hardware key events through /dev/uinput.
     if (m_socketFd < 0)
         connectToServer();
 
@@ -148,25 +260,41 @@ void OSKController::sendKey(bool isRelease, uint keycode) {
     }
 }
 
+static std::vector<std::string> g_capslock_paths;
+static void                     refresh_capslock_paths() {
+    g_capslock_paths.clear();
+    glob_t g;
+    if (glob("/sys/class/leds/*capslock/brightness", 0, nullptr, &g) == 0) {
+        for (size_t i = 0; i < g.gl_pathc; ++i)
+            g_capslock_paths.emplace_back(g.gl_pathv[i]);
+        globfree(&g);
+    }
+}
+
 void OSKController::queryCapsLockState() {
-    if (m_socketFd < 0)
-        connectToServer();
-    if (m_socketFd < 0)
-        return;
+    if (g_capslock_paths.empty())
+        refresh_capslock_paths();
 
-    LotusKeyCommand cmd;
-    cmd.type  = LotusKeyCommandType::QueryCapsLock;
-    cmd.code  = 0;
-    cmd.value = 0;
-
-    if (send(m_socketFd, &cmd, sizeof(cmd), MSG_NOSIGNAL) != sizeof(cmd)) {
-        close(m_socketFd);
-        m_socketFd = -1;
-        if (m_notifier) {
-            m_notifier->setEnabled(false);
-            delete m_notifier;
-            m_notifier = nullptr;
+    bool anyActive = false;
+    for (const auto& path : g_capslock_paths) {
+        int fd = open(path.c_str(), O_RDONLY);
+        if (fd >= 0) {
+            char    buf[16];
+            ssize_t r = read(fd, buf, sizeof(buf) - 1);
+            close(fd);
+            if (r > 0) {
+                buf[r] = '\0';
+                if (atoi(buf) > 0) {
+                    anyActive = true;
+                    break;
+                }
+            }
         }
+    }
+
+    if (anyActive != m_capsLockActive) {
+        m_capsLockActive = anyActive;
+        emit capsLockActiveChanged();
     }
 }
 
@@ -180,7 +308,6 @@ void OSKController::handleSocketActivated(int /*socket*/) {
             emit capsLockActiveChanged();
         }
     } else {
-        // Server disconnected or error - cleanup to avoid busy loop
         if (m_notifier) {
             m_notifier->setEnabled(false);
             delete m_notifier;
@@ -195,8 +322,11 @@ void OSKController::handleSocketActivated(int /*socket*/) {
 }
 
 void OSKController::Show() {
-    qDebug() << "DBus Show called";
-    setVisible(true);
+    qDebug() << "DBus Show called, autoShow:" << m_autoShow;
+    if (m_autoShow) {
+        loadConfig(); // Refresh theme/size on show
+        setVisible(true);
+    }
 }
 
 void OSKController::Hide() {

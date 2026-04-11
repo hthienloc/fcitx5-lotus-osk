@@ -182,7 +182,7 @@ void OSKWindow::updateKeyLabels() {
         it.value()->setStyleSheet(getButtonStyle(m_theme.bgNormal, m_theme.fgNormal));
     }
 
-    // Update special key styles (CapsLock, Shift, Enter, Space, Arrows, etc.)
+    // Update special key styles (CapsLock, Shift, Ctrl, Alt, Enter, Space, Arrows, etc.)
     for (auto* btn : m_specialButtons) {
         QString key    = btn->property("osk_key").toString();
         bool    active = false;
@@ -190,6 +190,10 @@ void OSKWindow::updateKeyLabels() {
             active = m_capsLockActive;
         else if (key == "Shift")
             active = m_shiftActive;
+        else if (key == "Ctrl")
+            active = m_ctrlActive;
+        else if (key == "Alt")
+            active = m_altActive;
 
         QString bg;
         QString fg;
@@ -272,9 +276,11 @@ QPair<uint, uint> OSKWindow::getKeyInfo(const QString& k) const {
     }
 
     // 2. Handle named special keys
-    static const QHash<QString, QPair<uint, uint>> specialMap = {{"Backspace", {0xff08, 14}}, {"Enter", {0xff0d, 28}},  {"Tab", {0xff09, 15}}, {"CapsLock", {0xffe5, 58}},
-                                                                 {"Shift", {0xffe1, 42}},     {"Super", {0xffeb, 125}}, {"Up", {0xff52, 103}}, {"Down", {0xff54, 108}},
-                                                                 {"Left", {0xff51, 105}},     {"Right", {0xff53, 106}}, {"Space", {0x20, 57}}};
+    static const QHash<QString, QPair<uint, uint>> specialMap = {
+        {"Backspace", {0xff08, 14}}, {"Enter", {0xff0d, 28}},     {"Tab", {0xff09, 15}},    {"CapsLock", {0xffe5, 58}}, {"Shift", {0xffe1, 42}},
+        {"Super", {0xffeb, 125}},    {"Up", {0xff52, 103}},      {"Down", {0xff54, 108}},   {"Left", {0xff51, 105}},    {"Right", {0xff53, 106}},
+        {"Space", {0x20, 57}},       {"Esc", {0xff1b, 1}},       {"Delete", {0xffff, 111}}, {"Ctrl", {0xffe3, 29}},     {"Alt", {0xffe9, 56}},
+        {"Hide", {0, 0}}};
 
     return specialMap.value(k, {0, 0});
 }
@@ -303,8 +309,8 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     double totalScale = dpr * m_scaleFactor;
 
     // Recalculate window size based on 5 rows and theme dimensions
-    double maxRowUnits = 14.5;
-    int    newWidth    = static_cast<int>((maxRowUnits * theme.keyWidth + (14 * theme.spacing) + (2 * theme.margin)) * totalScale);
+    double maxRowUnits = 15.5;
+    int    newWidth    = static_cast<int>((maxRowUnits * theme.keyWidth + (15 * theme.spacing) + (2 * theme.margin)) * totalScale);
     int    newHeight   = static_cast<int>((5 * theme.keyHeight + (4 * theme.spacing) + (2 * theme.margin)) * totalScale);
 
     resize(newWidth, newHeight);
@@ -367,10 +373,26 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
                 updateKeyLabels();
                 return;
             }
+            if (key == "Ctrl") {
+                m_ctrlActive = !m_ctrlActive;
+                updateKeyLabels();
+                return;
+            }
+            if (key == "Alt") {
+                m_altActive = !m_altActive;
+                updateKeyLabels();
+                return;
+            }
 
             auto info = getKeyInfo(key);
             if (m_shiftActive) {
                 m_controller->sendKey(false, 42); // Left Shift press
+            }
+            if (m_ctrlActive) {
+                m_controller->sendKey(false, 29); // Left Ctrl press
+            }
+            if (m_altActive) {
+                m_controller->sendKey(false, 56); // Left Alt press
             }
             m_controller->sendKey(false, info.second);
         });
@@ -380,15 +402,29 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
                 m_controller->sendKey(true, info.second);
                 return;
             }
-            if (key == "Hide" || key == "Shift") {
+            if (key == "Hide" || key == "Shift" || key == "Ctrl" || key == "Alt") {
                 return;
             }
 
             auto info = getKeyInfo(key);
             m_controller->sendKey(true, info.second);
+            bool labelsNeedUpdate = false;
             if (m_shiftActive) {
                 m_controller->sendKey(true, 42); // Left Shift release
-                m_shiftActive = false;
+                m_shiftActive    = false;
+                labelsNeedUpdate = true;
+            }
+            if (m_ctrlActive) {
+                m_controller->sendKey(true, 29); // Left Ctrl release
+                m_ctrlActive     = false;
+                labelsNeedUpdate = true;
+            }
+            if (m_altActive) {
+                m_controller->sendKey(true, 56); // Left Alt release
+                m_altActive      = false;
+                labelsNeedUpdate = true;
+            }
+            if (labelsNeedUpdate) {
                 updateKeyLabels();
             }
         });
@@ -397,17 +433,18 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
 
     QString ctrlStyle = QString("background-color: %1; font-size: 16px; color: %2;").arg(theme.bgSpecial).arg(theme.fgSpecial);
 
-    // Row 0: Numbers
+    // Row 0: Numbers + Esc
     auto row0 = new QHBoxLayout();
     row0->setSpacing(scaledSpacing);
     row0->setAlignment(Qt::AlignCenter);
+    row0->addWidget(createKey("Esc", "Esc", 1.0, ctrlStyle));
     for (const char* k : {"`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="}) {
         row0->addWidget(createKey(k));
     }
     row0->addWidget(createKey("Backspace", "⌫", 1.5, ctrlStyle));
     mainLayout->addLayout(row0);
 
-    // Row 1: QWERTY
+    // Row 1: QWERTY + Delete
     auto row1 = new QHBoxLayout();
     row1->setSpacing(scaledSpacing);
     row1->setAlignment(Qt::AlignCenter);
@@ -415,6 +452,7 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     for (const char* k : {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"}) {
         row1->addWidget(createKey(k));
     }
+    row1->addWidget(createKey("Delete", "Del", 1.0, ctrlStyle));
     mainLayout->addLayout(row1);
 
     // Row 2: ASDF
@@ -441,13 +479,15 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     row3->addWidget(createKey("Up", "↑", 1.25, ctrlStyle));
     mainLayout->addLayout(row3);
 
-    // Row 4: Bottom
+    // Row 4: Bottom (Ctrl, Super, Alt, Hide, Space, L, D, R)
     auto row4 = new QHBoxLayout();
     row4->setSpacing(scaledSpacing);
     row4->setAlignment(Qt::AlignCenter);
-    row4->addWidget(createKey("Hide", "⌨↓", 1.5, ctrlStyle));
-    row4->addWidget(createKey("Super", "⊞", 1.5, ctrlStyle));
-    row4->addWidget(createKey("Space", "␣", 7.5));
+    row4->addWidget(createKey("Ctrl", "Ctrl", 1.25, ctrlStyle));
+    row4->addWidget(createKey("Super", "⊞", 1.25, ctrlStyle));
+    row4->addWidget(createKey("Alt", "Alt", 1.25, ctrlStyle));
+    row4->addWidget(createKey("Hide", "⌨↓", 1.25, ctrlStyle));
+    row4->addWidget(createKey("Space", "␣", 6.75));
 
     // Other Arrows
     row4->addWidget(createKey("Left", "←", 1.25, ctrlStyle));

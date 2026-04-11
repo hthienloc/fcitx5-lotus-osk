@@ -39,6 +39,8 @@ class OSKWindow : public QWidget {
     Lotus::OSKTheme                 m_theme;
     bool                            m_capsLockActive = false;
     bool                            m_shiftActive    = false;
+    bool                            m_ctrlActive     = false;
+    bool                            m_altActive      = false;
     bool                            m_whiteTheme     = false;
     int                             m_baseWidth      = 1100;
     int                             m_baseHeight     = 380;

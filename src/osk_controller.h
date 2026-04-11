@@ -8,6 +8,9 @@
 #include <QTimer>
 #include <QSocketNotifier>
 
+#include <QSystemTrayIcon>
+#include <QMenu>
+
 class OSKWindow;
 
 class OSKController : public QObject {
@@ -46,6 +49,9 @@ class OSKController : public QObject {
     Q_INVOKABLE void sendKey(bool isRelease = false, uint keycode = 0);
     Q_INVOKABLE void queryCapsLockState(); // Now async
 
+    void loadConfig();
+    void saveConfig();
+
   public slots:
     // DBus methods matching the service expectations
     void Show();
@@ -66,13 +72,21 @@ class OSKController : public QObject {
   private:
     void             connectToServer();
     void             notifyServerVisibility();
+    bool             isSystemDarkMode() const;
+
     bool             m_visible        = false;
     bool             m_capsLockActive = false;
     bool             m_whiteTheme     = false;
     QString          m_oskSize        = "Standard";
+    bool             m_autoShow       = true;
+    QString          m_configPath;
+    QString          m_themeMode      = "Auto";
+
     OSKWindow*       m_window         = nullptr;
     int              m_socketFd       = -1;
     QSocketNotifier* m_notifier       = nullptr;
+    QSystemTrayIcon* m_trayIcon       = nullptr;
+    QMenu*           m_trayMenu       = nullptr;
     QTimer           m_hideTimer;
 };
 

@@ -50,3 +50,8 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/app.lotus.Osk.service
     DESTINATION ${CMAKE_INSTALL_DATADIR}/dbus-1/services
 )
+
+install(FILES
+    fcitx5-lotus-osk.desktop
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/applications
+)
