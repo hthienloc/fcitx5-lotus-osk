@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=app.lotus.Osk
+Exec=@CMAKE_INSTALL_FULL_BINDIR@/fcitx5-lotus-osk
+
