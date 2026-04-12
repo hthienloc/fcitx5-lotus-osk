@@ -178,7 +178,24 @@ void OSKWindow::updateKeyLabels() {
     bool upperSymbol = m_shiftActive;
 
     for (auto it = m_symbolButtons.begin(); it != m_symbolButtons.end(); ++it) {
-        it.value()->setText(upperSymbol && g_symbolMap.contains(it.key()) ? g_symbolMap.value(it.key()) : it.key());
+        QString key = it.key();
+        QString label = key;
+        
+        if (m_fnActive) {
+            static const QHash<QString, QString> fnLabels = {
+                {"1", "F1"}, {"2", "F2"}, {"3", "F3"}, {"4", "F4"}, {"5", "F5"}, {"6", "F6"},
+                {"7", "F7"}, {"8", "F8"}, {"9", "F9"}, {"0", "F10"}, {"-", "F11"}, {"=", "F12"}
+            };
+            if (fnLabels.contains(key)) {
+                label = fnLabels.value(key);
+            } else if (upperSymbol && g_symbolMap.contains(key)) {
+                label = g_symbolMap.value(key);
+            }
+        } else {
+            label = upperSymbol && g_symbolMap.contains(key) ? g_symbolMap.value(key) : key;
+        }
+        
+        it.value()->setText(label);
         it.value()->setStyleSheet(getButtonStyle(m_theme.bgNormal, m_theme.fgNormal));
     }
 
@@ -194,6 +211,8 @@ void OSKWindow::updateKeyLabels() {
             active = m_ctrlActive;
         else if (key == "Alt")
             active = m_altActive;
+        else if (key == "Fn")
+            active = m_fnActive;
 
         QString bg;
         QString fg;
@@ -280,7 +299,7 @@ QPair<uint, uint> OSKWindow::getKeyInfo(const QString& k) const {
         {"Backspace", {0xff08, 14}}, {"Enter", {0xff0d, 28}},     {"Tab", {0xff09, 15}},    {"CapsLock", {0xffe5, 58}}, {"Shift", {0xffe1, 42}},
         {"Super", {0xffeb, 125}},    {"Up", {0xff52, 103}},      {"Down", {0xff54, 108}},   {"Left", {0xff51, 105}},    {"Right", {0xff53, 106}},
         {"Space", {0x20, 57}},       {"Esc", {0xff1b, 1}},       {"Delete", {0xffff, 111}}, {"Ctrl", {0xffe3, 29}},     {"Alt", {0xffe9, 56}},
-        {"Hide", {0, 0}}};
+        {"Hide", {0, 0}},            {"Fn", {0, 0}}};
 
     return specialMap.value(k, {0, 0});
 }
@@ -346,6 +365,11 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
         btn->setStyleSheet(getButtonStyle(theme.bgNormal, theme.fgNormal, extraStyle));
 
         connect(btn, &QPushButton::pressed, this, [this, key]() {
+            if (key == "Fn") {
+                m_fnActive = !m_fnActive;
+                updateKeyLabels();
+                return;
+            }
             if (key == "Hide") {
                 m_controller->setVisible(false);
                 return;
@@ -385,6 +409,15 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
             }
 
             auto info = getKeyInfo(key);
+            if (m_fnActive) {
+                static const QHash<QString, uint> fnCodes = {
+                    {"1", 59}, {"2", 60}, {"3", 61}, {"4", 62}, {"5", 63}, {"6", 64},
+                    {"7", 65}, {"8", 66}, {"9", 67}, {"0", 68}, {"-", 87}, {"=", 88}
+                };
+                if (fnCodes.contains(key)) {
+                    info.second = fnCodes.value(key);
+                }
+            }
             if (m_shiftActive) {
                 m_controller->sendKey(false, 42); // Left Shift press
             }
@@ -402,13 +435,27 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
                 m_controller->sendKey(true, info.second);
                 return;
             }
-            if (key == "Hide" || key == "Shift" || key == "Ctrl" || key == "Alt") {
+            if (key == "Fn" || key == "Hide" || key == "Shift" || key == "Ctrl" || key == "Alt") {
                 return;
             }
 
             auto info = getKeyInfo(key);
-            m_controller->sendKey(true, info.second);
             bool labelsNeedUpdate = false;
+            
+            if (m_fnActive) {
+                static const QHash<QString, uint> fnCodes = {
+                    {"1", 59}, {"2", 60}, {"3", 61}, {"4", 62}, {"5", 63}, {"6", 64},
+                    {"7", 65}, {"8", 66}, {"9", 67}, {"0", 68}, {"-", 87}, {"=", 88}
+                };
+                if (fnCodes.contains(key)) {
+                    info.second = fnCodes.value(key);
+                    m_fnActive = false; // Turn off Fn (one-shot)
+                    labelsNeedUpdate = true;
+                }
+            }
+
+            m_controller->sendKey(true, info.second);
+            
             if (m_shiftActive) {
                 m_controller->sendKey(true, 42); // Left Shift release
                 m_shiftActive    = false;
@@ -463,31 +510,44 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     for (const char* k : {"A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'"}) {
         row2->addWidget(createKey(k));
     }
-    row2->addWidget(createKey("Enter", "⏎", 2.0, QString("background-color: %1; color: white;").arg(theme.bgActive)));
+    auto enterBtn = createKey("Enter", "⏎", 2.0, QString("background-color: %1; color: white;").arg(theme.bgActive));
+    enterBtn->setMaximumWidth(QWIDGETSIZE_MAX);
+    enterBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    row2->addWidget(enterBtn);
     mainLayout->addLayout(row2);
 
     // Row 3: ZXCV
     auto row3 = new QHBoxLayout();
     row3->setSpacing(scaledSpacing);
     row3->setAlignment(Qt::AlignCenter);
-    row3->addWidget(createKey("Shift", "⇧", 1.5, ctrlStyle));
+    
+    auto shiftBtn = createKey("Shift", "⇧", 1.5, ctrlStyle);
+    shiftBtn->setMaximumWidth(QWIDGETSIZE_MAX);
+    shiftBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    row3->addWidget(shiftBtn);
+    
     for (const char* k : {"Z", "X", "C", "V", "B", "N", "M", ",", ".", "/"}) {
         row3->addWidget(createKey(k));
     }
 
     // Up Arrow at the end of Row 3
     row3->addWidget(createKey("Up", "↑", 1.25, ctrlStyle));
+    row3->addWidget(createKey("Hide", "⌨↓", 1.25, ctrlStyle));
     mainLayout->addLayout(row3);
 
-    // Row 4: Bottom (Ctrl, Super, Alt, Hide, Space, L, D, R)
+    // Row 4: Bottom (Ctrl, Fn, Super, Alt, Hide, Space, L, D, R)
     auto row4 = new QHBoxLayout();
     row4->setSpacing(scaledSpacing);
     row4->setAlignment(Qt::AlignCenter);
     row4->addWidget(createKey("Ctrl", "Ctrl", 1.25, ctrlStyle));
+    row4->addWidget(createKey("Fn", "Fn", 1.25, ctrlStyle));
     row4->addWidget(createKey("Super", "⊞", 1.25, ctrlStyle));
     row4->addWidget(createKey("Alt", "Alt", 1.25, ctrlStyle));
-    row4->addWidget(createKey("Hide", "⌨↓", 1.25, ctrlStyle));
-    row4->addWidget(createKey("Space", "␣", 6.75));
+    
+    auto spaceBtn = createKey("Space", "␣", 6.75);
+    spaceBtn->setMaximumWidth(QWIDGETSIZE_MAX);
+    spaceBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    row4->addWidget(spaceBtn);
 
     // Other Arrows
     row4->addWidget(createKey("Left", "←", 1.25, ctrlStyle));
