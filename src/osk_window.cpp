@@ -299,7 +299,7 @@ QPair<uint, uint> OSKWindow::getKeyInfo(const QString& k) const {
         {"Backspace", {0xff08, 14}}, {"Enter", {0xff0d, 28}},     {"Tab", {0xff09, 15}},    {"CapsLock", {0xffe5, 58}}, {"Shift", {0xffe1, 42}},
         {"Super", {0xffeb, 125}},    {"Up", {0xff52, 103}},      {"Down", {0xff54, 108}},   {"Left", {0xff51, 105}},    {"Right", {0xff53, 106}},
         {"Space", {0x20, 57}},       {"Esc", {0xff1b, 1}},       {"Delete", {0xffff, 111}}, {"Ctrl", {0xffe3, 29}},     {"Alt", {0xffe9, 56}},
-        {"Hide", {0, 0}},            {"Fn", {0, 0}}};
+        {"PrtScn", {0xff61, 99}},    {"Hide", {0, 0}},           {"Fn", {0, 0}}};
 
     return specialMap.value(k, {0, 0});
 }
@@ -397,14 +397,20 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
                 updateKeyLabels();
                 return;
             }
+            if (key == "Alt") {
+                m_altActive = !m_altActive;
+                updateKeyLabels();
+                return;
+            }
             if (key == "Ctrl") {
                 m_ctrlActive = !m_ctrlActive;
                 updateKeyLabels();
                 return;
             }
-            if (key == "Alt") {
-                m_altActive = !m_altActive;
-                updateKeyLabels();
+            if (key == "PrtScn") {
+                m_controller->setVisible(false);
+                auto info = getKeyInfo(key);
+                m_controller->sendKey(false, info.second);
                 return;
             }
 
@@ -435,7 +441,11 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
                 m_controller->sendKey(true, info.second);
                 return;
             }
-            if (key == "Fn" || key == "Hide" || key == "Shift" || key == "Ctrl" || key == "Alt") {
+            if (key == "Fn" || key == "Hide" || key == "PrtScn" || key == "Shift" || key == "Ctrl" || key == "Alt") {
+                if (key == "PrtScn") {
+                    auto info = getKeyInfo(key);
+                    m_controller->sendKey(true, info.second);
+                }
                 return;
             }
 
@@ -488,14 +498,20 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     for (const char* k : {"`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="}) {
         row0->addWidget(createKey(k));
     }
-    row0->addWidget(createKey("Backspace", "⌫", 1.5, ctrlStyle));
+    auto backspaceBtn = createKey("Backspace", "⌫", 1.5, ctrlStyle);
+    backspaceBtn->setMaximumWidth(QWIDGETSIZE_MAX);
+    backspaceBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    row0->addWidget(backspaceBtn);
     mainLayout->addLayout(row0);
 
     // Row 1: QWERTY + Delete
     auto row1 = new QHBoxLayout();
     row1->setSpacing(scaledSpacing);
     row1->setAlignment(Qt::AlignCenter);
-    row1->addWidget(createKey("Tab", "⇥", 1.5, ctrlStyle));
+    auto tabBtn = createKey("Tab", "⇥", 1.5, ctrlStyle);
+    tabBtn->setMaximumWidth(QWIDGETSIZE_MAX);
+    tabBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    row1->addWidget(tabBtn);
     for (const char* k : {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"}) {
         row1->addWidget(createKey(k));
     }
@@ -506,7 +522,7 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     auto row2 = new QHBoxLayout();
     row2->setSpacing(scaledSpacing);
     row2->setAlignment(Qt::AlignCenter);
-    row2->addWidget(createKey("CapsLock", "⇪", 1.5, ctrlStyle));
+    row2->addWidget(createKey("CapsLock", "⇪", 1.85, ctrlStyle));
     for (const char* k : {"A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'"}) {
         row2->addWidget(createKey(k));
     }
@@ -530,7 +546,8 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
         row3->addWidget(createKey(k));
     }
 
-    // Up Arrow at the end of Row 3
+    // ⎙ + Up Arrow + Hide at the end of Row 3
+    row3->addWidget(createKey("PrtScn", "⛶", 1.25, ctrlStyle));
     row3->addWidget(createKey("Up", "↑", 1.25, ctrlStyle));
     row3->addWidget(createKey("Hide", "⌨↓", 1.25, ctrlStyle));
     mainLayout->addLayout(row3);
