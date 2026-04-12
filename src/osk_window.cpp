@@ -48,6 +48,9 @@ OSKWindow::OSKWindow(OSKController* controller, QWidget* parent) : QWidget(paren
 
     // Theme update connection
     connect(m_controller, &OSKController::whiteThemeChanged, this, [this]() { setWhiteTheme(m_controller->whiteTheme()); });
+
+    // Esc key visibility connection
+    connect(m_controller, &OSKController::showEscChanged, this, [this]() { setupLayout(m_theme); });
 }
 
 OSKWindow::~OSKWindow() {}
@@ -494,7 +497,9 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     auto row0 = new QHBoxLayout();
     row0->setSpacing(scaledSpacing);
     row0->setAlignment(Qt::AlignCenter);
-    row0->addWidget(createKey("Esc", "Esc", 1.0, ctrlStyle));
+    if (m_controller->showEsc()) {
+        row0->addWidget(createKey("Esc", "Esc", 1.0, ctrlStyle));
+    }
     for (const char* k : {"`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="}) {
         row0->addWidget(createKey(k));
     }

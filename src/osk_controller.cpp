@@ -42,8 +42,15 @@ OSKController::OSKController(QObject* parent) : QObject(parent), m_visible(false
 
     auto* autoShowAction = m_trayMenu->addAction("Enable Auto-Show");
     autoShowAction->setCheckable(true);
-    connect(autoShowAction, &QAction::triggered, this, [this, autoShowAction](bool checked) {
+    connect(autoShowAction, &QAction::triggered, this, [this](bool checked) {
         m_autoShow = checked;
+        saveConfig();
+    });
+
+    auto* showEscAction = m_trayMenu->addAction("Show Esc Key");
+    showEscAction->setCheckable(true);
+    connect(showEscAction, &QAction::triggered, this, [this](bool checked) {
+        setShowEsc(checked);
         saveConfig();
     });
 
@@ -110,6 +117,8 @@ OSKController::OSKController(QObject* parent) : QObject(parent), m_visible(false
     for (QAction* act : sizeGroup->actions()) {
         if (act->text() == m_oskSize) act->setChecked(true);
     }
+    // Sync Show Esc checkbox
+    showEscAction->setChecked(m_showEsc);
 }
 
 void OSKController::loadConfig() {
@@ -117,6 +126,7 @@ void OSKController::loadConfig() {
     m_autoShow = settings.value("AutoShow", true).toBool();
     m_themeMode = settings.value("Theme", "Auto").toString();
     m_oskSize = settings.value("Size", "Standard").toString();
+    m_showEsc = settings.value("ShowEsc", false).toBool();
 
     if (m_themeMode == "Light") {
         m_whiteTheme = true;
@@ -137,6 +147,7 @@ void OSKController::saveConfig() {
     settings.setValue("AutoShow", m_autoShow);
     settings.setValue("Theme", m_themeMode);
     settings.setValue("Size", m_oskSize);
+    settings.setValue("ShowEsc", m_showEsc);
     settings.sync();
 }
 
@@ -368,4 +379,14 @@ void OSKController::setOskSize(const QString& size) {
 void OSKController::SetSize(const QString& size) {
     qDebug() << "DBus SetSize called:" << size;
     setOskSize(size);
+}
+
+void OSKController::setShowEsc(bool show) {
+    if (m_showEsc != show) {
+        m_showEsc = show;
+        if (m_window) {
+            m_window->setupLayout(m_window->currentTheme()); // Refresh layout
+        }
+        emit showEscChanged();
+    }
 }

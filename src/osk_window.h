@@ -18,6 +18,8 @@ class OSKWindow : public QWidget {
 
     void setWhiteTheme(bool white);
     void setOSKSize(const QString& size);
+    void setupLayout(const Lotus::OSKTheme& theme);
+    Lotus::OSKTheme currentTheme() const { return m_theme; }
 
   protected:
     void showEvent(QShowEvent* event) override;
@@ -30,7 +32,6 @@ class OSKWindow : public QWidget {
         uint keysym;
         uint keysymUpper;
     };
-    void                            setupLayout(const Lotus::OSKTheme& theme);
     void                            updateKeyLabels();
     QPair<uint, uint>               getKeyInfo(const QString& key) const;
     QString                         getButtonStyle(const QString& bg, const QString& fg, const QString& extra = "") const;
