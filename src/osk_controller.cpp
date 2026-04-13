@@ -53,6 +53,13 @@ OSKController::OSKController(QObject* parent) : QObject(parent), m_visible(false
         setShowEsc(checked);
         saveConfig();
     });
+    
+    auto* autoStartAction = m_trayMenu->addAction("Auto-start with System");
+    autoStartAction->setCheckable(true);
+    connect(autoStartAction, &QAction::triggered, this, [this](bool checked) {
+        setAutoStart(checked);
+        saveConfig();
+    });
 
     m_trayMenu->addSeparator();
 
@@ -119,6 +126,8 @@ OSKController::OSKController(QObject* parent) : QObject(parent), m_visible(false
     }
     // Sync Show Esc checkbox
     showEscAction->setChecked(m_showEsc);
+    // Sync Auto-start checkbox
+    autoStartAction->setChecked(m_autoStart);
 }
 
 void OSKController::loadConfig() {
@@ -127,6 +136,7 @@ void OSKController::loadConfig() {
     m_themeMode = settings.value("Theme", "Auto").toString();
     m_oskSize = settings.value("Size", "Standard").toString();
     m_showEsc = settings.value("ShowEsc", false).toBool();
+    m_autoStart = settings.value("AutoStart", false).toBool();
 
     if (m_themeMode == "Light") {
         m_whiteTheme = true;
@@ -148,12 +158,47 @@ void OSKController::saveConfig() {
     settings.setValue("Theme", m_themeMode);
     settings.setValue("Size", m_oskSize);
     settings.setValue("ShowEsc", m_showEsc);
+    settings.setValue("AutoStart", m_autoStart);
     settings.sync();
 }
 
 bool OSKController::isSystemDarkMode() const {
     QPalette pal = qApp->palette();
     return pal.color(QPalette::WindowText).lightness() > pal.color(QPalette::Window).lightness();
+}
+
+void OSKController::setAutoStart(bool enabled) {
+    if (m_autoStart == enabled) return;
+    m_autoStart = enabled;
+    
+    QString autostartDir = QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) + "/autostart";
+    QDir().mkpath(autostartDir);
+    QString desktopPath = autostartDir + "/fcitx5-lotus-osk.desktop";
+    
+    if (enabled) {
+        QFile file(desktopPath);
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&file);
+            out << "[Desktop Entry]\n"
+                << "Type=Application\n"
+                << "Name=Lotus OSK\n"
+                << "Comment=On-Screen Keyboard for Lotus Input Method\n"
+                << "Exec=fcitx5-lotus-osk\n"
+                << "Icon=input-keyboard\n"
+                << "Terminal=false\n"
+                << "Categories=Settings;Utility;\n"
+                << "Keywords=keyboard;osk;lotus;\n"
+                << "X-GNOME-Autostart-enabled=true\n";
+            file.close();
+            qDebug() << "Autostart entry created at" << desktopPath;
+        }
+    } else {
+        if (QFile::exists(desktopPath)) {
+            QFile::remove(desktopPath);
+            qDebug() << "Autostart entry removed from" << desktopPath;
+        }
+    }
+    emit autoStartChanged();
 }
 
 void OSKController::connectToServer() {

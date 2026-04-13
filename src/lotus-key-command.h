@@ -19,9 +19,10 @@ enum class LotusKeyCommandType : uint32_t {
 };
 
 struct LotusKeyCommand {
-    LotusKeyCommandType type;  // Command type
-    uint32_t            code;  // Keycode or count
-    uint32_t            value; // 0/1 for key event
+    uint32_t            magic = 0x4C545553; // 'LTUS'
+    LotusKeyCommandType type;               // Command type
+    uint32_t            code;               // Keycode or count
+    uint32_t            value;              // 0/1 for key event
 };
 
 #endif // _LOTUS_KEY_COMMAND_H_
