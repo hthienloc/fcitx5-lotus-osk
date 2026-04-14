@@ -21,6 +21,7 @@ class OSKController : public QObject {
     Q_PROPERTY(bool whiteTheme READ whiteTheme WRITE setWhiteTheme NOTIFY whiteThemeChanged)
     Q_PROPERTY(QString oskSize READ oskSize WRITE setOskSize NOTIFY oskSizeChanged)
     Q_PROPERTY(bool showEsc READ showEsc WRITE setShowEsc NOTIFY showEscChanged)
+    Q_PROPERTY(bool autoStart READ autoStart WRITE setAutoStart NOTIFY autoStartChanged)
 
   public:
     explicit OSKController(QObject* parent = nullptr);
@@ -39,12 +40,16 @@ class OSKController : public QObject {
     void    setWhiteTheme(bool white);
     void    setOskSize(const QString& size);
     void    setShowEsc(bool show);
+    void    setAutoStart(bool enabled);
 
     QString oskSize() const {
         return m_oskSize;
     }
     bool showEsc() const {
         return m_showEsc;
+    }
+    bool autoStart() const {
+        return m_autoStart;
     }
 
     void showWindow();
@@ -71,6 +76,7 @@ class OSKController : public QObject {
     void whiteThemeChanged();
     void oskSizeChanged();
     void showEscChanged();
+    void autoStartChanged();
 
   private slots:
     void handleSocketActivated(int socket);
@@ -84,6 +90,7 @@ class OSKController : public QObject {
     bool             m_capsLockActive = false;
     bool             m_whiteTheme     = false;
     bool             m_showEsc        = false;
+    bool             m_autoStart      = false;
     QString          m_oskSize        = "Standard";
     bool             m_autoShow       = true;
     QString          m_configPath;
