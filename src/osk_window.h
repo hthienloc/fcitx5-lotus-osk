@@ -4,7 +4,6 @@
 #include <QWidget>
 #include <QMap>
 #include <QPushButton>
-#include <QTemporaryFile>
 #include "osk_theme.h"
 
 class OSKController;
