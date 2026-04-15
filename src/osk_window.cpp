@@ -12,10 +12,21 @@
 #include <LayerShellQt/Window>
 #endif
 #include <QTemporaryFile>
+#include <QDir>
 
 static const QHash<QString, QString> g_symbolMap = {{"1", "!"},  {"2", "@"}, {"3", "#"},  {"4", "$"}, {"5", "%"}, {"6", "^"}, {"7", "&&"},
                                                     {"8", "*"},  {"9", "("}, {"0", ")"},  {"-", "_"}, {"=", "+"}, {"[", "{"}, {"]", "}"},
                                                     {"\\", "|"}, {";", ":"}, {"'", "\""}, {",", "<"}, {".", ">"}, {"/", "?"}, {"`", "~"}};
+
+static const QHash<QString, QString> g_fnLabels = {
+    {"1", "F1"}, {"2", "F2"}, {"3", "F3"}, {"4", "F4"}, {"5", "F5"}, {"6", "F6"},
+    {"7", "F7"}, {"8", "F8"}, {"9", "F9"}, {"0", "F10"}, {"-", "F11"}, {"=", "F12"}
+};
+
+static const QHash<QString, uint> g_fnCodes = {
+    {"1", 59}, {"2", 60}, {"3", 61}, {"4", 62}, {"5", 63}, {"6", 64},
+    {"7", 65}, {"8", 66}, {"9", 67}, {"0", 68}, {"-", 87}, {"=", 88}
+};
 
 OSKWindow::OSKWindow(OSKController* controller, QWidget* parent) : QWidget(parent), m_controller(controller) {
     // Set window properties for OSK
@@ -90,15 +101,13 @@ void OSKWindow::showEvent(QShowEvent* event) {
         m_kwinScriptId = -1;
     }
 
-    auto* kwinScriptFile = new QTemporaryFile(QDir::tempPath() + "/lotus-osk-kwin-script-XXXXXX.js", this);
-    kwinScriptFile->setAutoRemove(false);
-    if (kwinScriptFile->open()) {
-        kwinScriptFile->write(script.toUtf8());
-        kwinScriptFile->close();
-        msg << kwinScriptFile->fileName() << "lotus-osk-keep-above";
+    QTemporaryFile kwinScriptFile(QDir::tempPath() + "/lotus-osk-kwin-script-XXXXXX.js");
+    if (kwinScriptFile.open()) {
+        kwinScriptFile.write(script.toUtf8());
+        kwinScriptFile.close();
+        msg << kwinScriptFile.fileName() << "lotus-osk-keep-above";
     } else {
         qWarning() << "Failed to create temporary file for KWin script";
-        kwinScriptFile->deleteLater();
         return;
     }
 
@@ -108,12 +117,6 @@ void OSKWindow::showEvent(QShowEvent* event) {
         QDBusMessage runMsg = QDBusMessage::createMethodCall("org.kde.KWin", "/Scripting/Script" + QString::number(m_kwinScriptId), "org.kde.KWin.Script", "run");
         QDBusConnection::sessionBus().send(runMsg);
     }
-    // The script file can be deleted after KWin load it. Since loadScript is sync call (wait for reply),
-    // it's mostly safe to delete now, but we use a small delay just to be sure.
-    QTimer::singleShot(2000, [kwinScriptFile]() {
-        QFile::remove(kwinScriptFile->fileName());
-        kwinScriptFile->deleteLater();
-    });
 #endif
 }
 
@@ -185,12 +188,8 @@ void OSKWindow::updateKeyLabels() {
         QString label = key;
         
         if (m_fnActive) {
-            static const QHash<QString, QString> fnLabels = {
-                {"1", "F1"}, {"2", "F2"}, {"3", "F3"}, {"4", "F4"}, {"5", "F5"}, {"6", "F6"},
-                {"7", "F7"}, {"8", "F8"}, {"9", "F9"}, {"0", "F10"}, {"-", "F11"}, {"=", "F12"}
-            };
-            if (fnLabels.contains(key)) {
-                label = fnLabels.value(key);
+            if (g_fnLabels.contains(key)) {
+                label = g_fnLabels.value(key);
             } else if (upperSymbol && g_symbolMap.contains(key)) {
                 label = g_symbolMap.value(key);
             }
@@ -419,12 +418,8 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
 
             auto info = getKeyInfo(key);
             if (m_fnActive) {
-                static const QHash<QString, uint> fnCodes = {
-                    {"1", 59}, {"2", 60}, {"3", 61}, {"4", 62}, {"5", 63}, {"6", 64},
-                    {"7", 65}, {"8", 66}, {"9", 67}, {"0", 68}, {"-", 87}, {"=", 88}
-                };
-                if (fnCodes.contains(key)) {
-                    info.second = fnCodes.value(key);
+                if (g_fnCodes.contains(key)) {
+                    info.second = g_fnCodes.value(key);
                 }
             }
             if (m_shiftActive) {
@@ -456,12 +451,8 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
             bool labelsNeedUpdate = false;
             
             if (m_fnActive) {
-                static const QHash<QString, uint> fnCodes = {
-                    {"1", 59}, {"2", 60}, {"3", 61}, {"4", 62}, {"5", 63}, {"6", 64},
-                    {"7", 65}, {"8", 66}, {"9", 67}, {"0", 68}, {"-", 87}, {"=", 88}
-                };
-                if (fnCodes.contains(key)) {
-                    info.second = fnCodes.value(key);
+                if (g_fnCodes.contains(key)) {
+                    info.second = g_fnCodes.value(key);
                     m_fnActive = false; // Turn off Fn (one-shot)
                     labelsNeedUpdate = true;
                 }
@@ -492,6 +483,7 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     };
 
     QString ctrlStyle = QString("background-color: %1; font-size: 16px; color: %2;").arg(theme.bgSpecial).arg(theme.fgSpecial);
+    QString prtScStyle = QString("background-color: %1; font-size: 22px; color: %2;").arg(theme.bgSpecial).arg(theme.fgSpecial);
 
     // Row 0: Numbers + Esc
     auto row0 = new QHBoxLayout();
@@ -520,7 +512,7 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     for (const char* k : {"Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"}) {
         row1->addWidget(createKey(k));
     }
-    row1->addWidget(createKey("Delete", "Del", 1.0, ctrlStyle));
+    row1->addWidget(createKey("PrtScn", "⛶", 1.0, prtScStyle));
     mainLayout->addLayout(row1);
 
     // Row 2: ASDF
@@ -552,7 +544,7 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
     }
 
     // ⎙ + Up Arrow + Hide at the end of Row 3
-    row3->addWidget(createKey("PrtScn", "⛶", 1.25, ctrlStyle));
+    row3->addWidget(createKey("Shift", "⇧", 1.25, ctrlStyle));
     row3->addWidget(createKey("Up", "↑", 1.25, ctrlStyle));
     row3->addWidget(createKey("Hide", "⌨↓", 1.25, ctrlStyle));
     mainLayout->addLayout(row3);
