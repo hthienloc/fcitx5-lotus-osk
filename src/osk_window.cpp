@@ -12,6 +12,7 @@
 #include <LayerShellQt/Window>
 #endif
 #include <QTemporaryFile>
+#include <QDir>
 
 static const QHash<QString, QString> g_symbolMap = {{"1", "!"},  {"2", "@"}, {"3", "#"},  {"4", "$"}, {"5", "%"}, {"6", "^"}, {"7", "&&"},
                                                     {"8", "*"},  {"9", "("}, {"0", ")"},  {"-", "_"}, {"=", "+"}, {"[", "{"}, {"]", "}"},
@@ -91,7 +92,6 @@ void OSKWindow::showEvent(QShowEvent* event) {
     }
 
     auto* kwinScriptFile = new QTemporaryFile(QDir::tempPath() + "/lotus-osk-kwin-script-XXXXXX.js", this);
-    kwinScriptFile->setAutoRemove(false);
     if (kwinScriptFile->open()) {
         kwinScriptFile->write(script.toUtf8());
         kwinScriptFile->close();
@@ -109,11 +109,8 @@ void OSKWindow::showEvent(QShowEvent* event) {
         QDBusConnection::sessionBus().send(runMsg);
     }
     // The script file can be deleted after KWin load it. Since loadScript is sync call (wait for reply),
-    // it's mostly safe to delete now, but we use a small delay just to be sure.
-    QTimer::singleShot(2000, [kwinScriptFile]() {
-        QFile::remove(kwinScriptFile->fileName());
-        kwinScriptFile->deleteLater();
-    });
+    // we can delete it right here.
+    kwinScriptFile->deleteLater();
 #endif
 }
 
