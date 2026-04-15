@@ -12,10 +12,6 @@
 #include <LayerShellQt/Window>
 #endif
 #include <QTemporaryFile>
-#include <QDir>
-#include <QTimer>
-#include <QScreen>
-#include <QGuiApplication>
 
 static const QHash<QString, QString> g_symbolMap = {{"1", "!"},  {"2", "@"}, {"3", "#"},  {"4", "$"}, {"5", "%"}, {"6", "^"}, {"7", "&&"},
                                                     {"8", "*"},  {"9", "("}, {"0", ")"},  {"-", "_"}, {"=", "+"}, {"[", "{"}, {"]", "}"},
