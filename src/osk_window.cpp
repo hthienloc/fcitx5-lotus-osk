@@ -91,14 +91,13 @@ void OSKWindow::showEvent(QShowEvent* event) {
         m_kwinScriptId = -1;
     }
 
-    auto* kwinScriptFile = new QTemporaryFile(QDir::tempPath() + "/lotus-osk-kwin-script-XXXXXX.js", this);
-    if (kwinScriptFile->open()) {
-        kwinScriptFile->write(script.toUtf8());
-        kwinScriptFile->close();
-        msg << kwinScriptFile->fileName() << "lotus-osk-keep-above";
+    QTemporaryFile kwinScriptFile(QDir::tempPath() + "/lotus-osk-kwin-script-XXXXXX.js");
+    if (kwinScriptFile.open()) {
+        kwinScriptFile.write(script.toUtf8());
+        kwinScriptFile.close();
+        msg << kwinScriptFile.fileName() << "lotus-osk-keep-above";
     } else {
         qWarning() << "Failed to create temporary file for KWin script";
-        kwinScriptFile->deleteLater();
         return;
     }
 
@@ -108,9 +107,6 @@ void OSKWindow::showEvent(QShowEvent* event) {
         QDBusMessage runMsg = QDBusMessage::createMethodCall("org.kde.KWin", "/Scripting/Script" + QString::number(m_kwinScriptId), "org.kde.KWin.Script", "run");
         QDBusConnection::sessionBus().send(runMsg);
     }
-    // The script file can be deleted after KWin load it. Since loadScript is sync call (wait for reply),
-    // we can delete it right here.
-    kwinScriptFile->deleteLater();
 #endif
 }
 
