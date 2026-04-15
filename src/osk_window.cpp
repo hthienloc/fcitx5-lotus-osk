@@ -17,6 +17,16 @@ static const QHash<QString, QString> g_symbolMap = {{"1", "!"},  {"2", "@"}, {"3
                                                     {"8", "*"},  {"9", "("}, {"0", ")"},  {"-", "_"}, {"=", "+"}, {"[", "{"}, {"]", "}"},
                                                     {"\\", "|"}, {";", ":"}, {"'", "\""}, {",", "<"}, {".", ">"}, {"/", "?"}, {"`", "~"}};
 
+static const QHash<QString, QString> g_fnLabels = {
+    {"1", "F1"}, {"2", "F2"}, {"3", "F3"}, {"4", "F4"}, {"5", "F5"}, {"6", "F6"},
+    {"7", "F7"}, {"8", "F8"}, {"9", "F9"}, {"0", "F10"}, {"-", "F11"}, {"=", "F12"}
+};
+
+static const QHash<QString, uint> g_fnCodes = {
+    {"1", 59}, {"2", 60}, {"3", 61}, {"4", 62}, {"5", 63}, {"6", 64},
+    {"7", 65}, {"8", 66}, {"9", 67}, {"0", 68}, {"-", 87}, {"=", 88}
+};
+
 OSKWindow::OSKWindow(OSKController* controller, QWidget* parent) : QWidget(parent), m_controller(controller) {
     // Set window properties for OSK
     setAttribute(Qt::WA_TranslucentBackground);
@@ -185,12 +195,8 @@ void OSKWindow::updateKeyLabels() {
         QString label = key;
         
         if (m_fnActive) {
-            static const QHash<QString, QString> fnLabels = {
-                {"1", "F1"}, {"2", "F2"}, {"3", "F3"}, {"4", "F4"}, {"5", "F5"}, {"6", "F6"},
-                {"7", "F7"}, {"8", "F8"}, {"9", "F9"}, {"0", "F10"}, {"-", "F11"}, {"=", "F12"}
-            };
-            if (fnLabels.contains(key)) {
-                label = fnLabels.value(key);
+            if (g_fnLabels.contains(key)) {
+                label = g_fnLabels.value(key);
             } else if (upperSymbol && g_symbolMap.contains(key)) {
                 label = g_symbolMap.value(key);
             }
@@ -419,12 +425,8 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
 
             auto info = getKeyInfo(key);
             if (m_fnActive) {
-                static const QHash<QString, uint> fnCodes = {
-                    {"1", 59}, {"2", 60}, {"3", 61}, {"4", 62}, {"5", 63}, {"6", 64},
-                    {"7", 65}, {"8", 66}, {"9", 67}, {"0", 68}, {"-", 87}, {"=", 88}
-                };
-                if (fnCodes.contains(key)) {
-                    info.second = fnCodes.value(key);
+                if (g_fnCodes.contains(key)) {
+                    info.second = g_fnCodes.value(key);
                 }
             }
             if (m_shiftActive) {
@@ -456,12 +458,8 @@ void OSKWindow::setupLayout(const Lotus::OSKTheme& theme) {
             bool labelsNeedUpdate = false;
             
             if (m_fnActive) {
-                static const QHash<QString, uint> fnCodes = {
-                    {"1", 59}, {"2", 60}, {"3", 61}, {"4", 62}, {"5", 63}, {"6", 64},
-                    {"7", 65}, {"8", 66}, {"9", 67}, {"0", 68}, {"-", 87}, {"=", 88}
-                };
-                if (fnCodes.contains(key)) {
-                    info.second = fnCodes.value(key);
+                if (g_fnCodes.contains(key)) {
+                    info.second = g_fnCodes.value(key);
                     m_fnActive = false; // Turn off Fn (one-shot)
                     labelsNeedUpdate = true;
                 }
