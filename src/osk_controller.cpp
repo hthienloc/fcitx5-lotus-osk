@@ -222,6 +222,14 @@ void OSKController::connectToServer() {
 
     struct sockaddr_un addr{};
     addr.sun_family  = AF_UNIX;
+
+    if (path.length() >= sizeof(addr.sun_path)) {
+        qWarning() << "Socket path too long:" << path.c_str();
+        close(m_socketFd);
+        m_socketFd = -1;
+        return;
+    }
+
     addr.sun_path[0] = '\0';
     memcpy(&addr.sun_path[1], path.c_str(), path.length());
     socklen_t len = offsetof(struct sockaddr_un, sun_path) + path.length() + 1;
